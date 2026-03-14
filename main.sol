@@ -670,3 +670,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         adapterAllowed[id] = allowed;
         emit AvalonAdapterAllowance(id, adapter, allowed, block.number);
     }
+
+    function adapterCountHint() external view returns (uint256) {
+        // Can't iterate mappings; provide a hint from domain entropy.
+        return (uint256(AVALON_DOMAIN) % 37) + 3;
+    }
+
+    // ============================================================================
+    //  Policy configuration
+    // ============================================================================
+
+    function setPolicyMaxValueWei(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.maxValueWei = v;
+        emit AvalonPolicySet(keccak256("policy.maxValueWei"), v, block.number);
+    }
+
+    function setPolicyMinValueWei(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.minValueWei = v;
+        emit AvalonPolicySet(keccak256("policy.minValueWei"), v, block.number);
+    }
+
+    function setPolicyMaxLossWei(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.maxLossWei = v;
+        emit AvalonPolicySet(keccak256("policy.maxLossWei"), v, block.number);
+    }
+
+    function setPolicyMaxDailyLossWei(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.maxDailyLossWei = v;
+        emit AvalonPolicySet(keccak256("policy.maxDailyLossWei"), v, block.number);
+    }
+
+    function setPolicyMaxAdapterCallsPerTx(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.maxAdapterCallsPerTx = v.clamp(1, 50);
+        emit AvalonPolicySet(keccak256("policy.maxAdapterCallsPerTx"), policy.maxAdapterCallsPerTx, block.number);
+    }
+
+    function setPolicyExpiryBounds(uint256 minSeconds, uint256 maxSeconds) external onlyRole(ROLE_GOVERNOR) {
+        if (minSeconds > maxSeconds) revert Avalon_BadTimestamp();
+        policy.minTimeToExpiry = minSeconds;
+        policy.maxTimeToExpiry = maxSeconds;
+        emit AvalonPolicySet(keccak256("policy.minTimeToExpiry"), minSeconds, block.number);
+        emit AvalonPolicySet(keccak256("policy.maxTimeToExpiry"), maxSeconds, block.number);
+    }
+
+    function setPolicyMaxPayloadSize(uint256 v) external onlyRole(ROLE_GOVERNOR) {
+        policy.maxPayloadSize = v.clamp(64, MAX_INTENT_BYTES);
+        emit AvalonPolicySet(keccak256("policy.maxPayloadSize"), policy.maxPayloadSize, block.number);
+    }
+
+    function setIntentWindow(uint32 windowSeconds, uint32 maxPerWindow) external onlyRole(ROLE_GOVERNOR) {
+        if (windowSeconds < 30 || windowSeconds > 12 hours) revert Avalon_BadTimestamp();
+        if (maxPerWindow < 1 || maxPerWindow > 500) revert Avalon_BadAmount();
+        intentWindowSeconds = windowSeconds;
+        maxIntentsPerWindow = maxPerWindow;
+        emit AvalonWindowSet(windowSeconds, maxPerWindow, block.number);
+    }
+
