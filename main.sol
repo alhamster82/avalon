@@ -446,3 +446,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         address indexed adapter,
         uint256 assetsBefore,
         uint256 assetsAfter,
+        bytes result,
+        uint256 atBlock
+    );
+
+    event AvalonIntentVoided(uint256 indexed intentId, uint8 reasonCode, address indexed by, uint256 atBlock);
+    event AvalonPolicySet(bytes32 indexed key, uint256 value, uint256 atBlock);
+    event AvalonWindowSet(uint32 windowSeconds, uint32 maxPerWindow, uint256 atBlock);
+    event AvalonCooldownSet(uint32 cooldownSeconds, uint256 atBlock);
+    event AvalonSweep(address indexed token, address indexed to, uint256 amount, uint256 atBlock);
+
+    // ----------------------------
+    // Roles (unique)
+    // ----------------------------
+
+    bytes32 public constant ROLE_GOVERNOR = keccak256("AVALON/ROLE/GOVERNOR");
+    bytes32 public constant ROLE_SENTINEL = keccak256("AVALON/ROLE/SENTINEL");
+    bytes32 public constant ROLE_OPERATOR = keccak256("AVALON/ROLE/OPERATOR");
+    bytes32 public constant ROLE_FEE_SETTER = keccak256("AVALON/ROLE/FEE_SETTER");
+
+    // ----------------------------
+    // Constants (unique)
+    // ----------------------------
+
+    uint256 public constant AVALON_REVISION = 7;
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    uint256 public constant MAX_INTENT_BYTES = 4096;
+    uint256 public constant MAX_ADAPTERS_TRACKED = 256;
+
+    bytes32 public immutable AVALON_DOMAIN;
+    address public immutable genesisDeployer;
+
+    IERC20 public immutable asset;
+    AvalonShareToken public immutable share;
+
+    // ----------------------------
+    // Fee config
+    // ----------------------------
+
+    uint16 public feeBps;
+    address public feeReceiver;
+
+    // ----------------------------
+    // Vault accounting
+    // ----------------------------
+
+    uint256 public totalManagedAssetsHint;
+    uint64 public lastSyncAt;
+
+    // ----------------------------
+    // Intent policy
+    // ----------------------------
+
+    struct Policy {
+        uint256 maxValueWei;
+        uint256 minValueWei;
+        uint256 maxLossWei;
