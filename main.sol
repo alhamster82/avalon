@@ -614,3 +614,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
     }
 
     // ============================================================================
+    //  Role management (two-step offer/accept, TTL)
+    // ============================================================================
+
+    function offerRole(bytes32 role, address to, uint64 ttlSeconds) external onlyRole(ROLE_GOVERNOR) {
+        if (ttlSeconds < 60 || ttlSeconds > 30 days) revert Avalon_BadRoleTTL();
+        _offerRole(role, to, ttlSeconds);
+    }
+
+    function acceptRole(bytes32 role) external {
+        _acceptRole(role);
+    }
+
+    function revokeRole(bytes32 role) external onlyRole(ROLE_GOVERNOR) {
+        _revokeRole(role);
+    }
+
+    // ============================================================================
+    //  Pausing
+    // ============================================================================
+
+    function setPaused(bool p) external onlyRole(ROLE_SENTINEL) {
+        _setPaused(p);
+    }
+
+    // ============================================================================
+    //  Fee
+    // ============================================================================
+
+    function setFee(uint16 feeBps_, address feeReceiver_) external onlyRole(ROLE_FEE_SETTER) {
+        if (feeBps_ > 200) revert Avalon_BadFeeBps(); // <= 2%
+        if (feeReceiver_ == address(0)) revert Avalon_ZeroAddress();
+        feeBps = feeBps_;
+        feeReceiver = feeReceiver_;
+        emit AvalonFeeSet(feeBps_, feeReceiver_, block.number);
+    }
+
+    // ============================================================================
+    //  Receiver blocklist (defensive)
+    // ============================================================================
+
+    function setReceiverBlocked(address receiver, bool blocked) external onlyRole(ROLE_SENTINEL) {
+        receiverBlocked[receiver] = blocked;
+        emit AvalonReceiverBlock(receiver, blocked, block.number);
+    }
+
+    // ============================================================================
+    //  Adapter registry
+    // ============================================================================
+
+    function setAdapterAllowed(address adapter, bool allowed) external onlyRole(ROLE_GOVERNOR) {
+        if (adapter == address(0)) revert Avalon_BadAdapter();
+        bytes32 id = IAvalonAdapter(adapter).avalonAdapterId();
+        adapterById[id] = adapter;
+        adapterAllowed[id] = allowed;
+        emit AvalonAdapterAllowance(id, adapter, allowed, block.number);
+    }
