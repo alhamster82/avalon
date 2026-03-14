@@ -54,3 +54,59 @@ interface IAvalonAdapter {
     function execute(bytes calldata payload) external payable returns (bytes memory result);
 }
 
+// ============================================================================
+//  Libraries
+// ============================================================================
+
+library AvalonMath {
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
+    }
+
+    function clamp(uint256 x, uint256 lo, uint256 hi) internal pure returns (uint256) {
+        if (x < lo) return lo;
+        if (x > hi) return hi;
+        return x;
+    }
+
+    function saturatingSub(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a - b : 0;
+    }
+
+    function mulDivDown(uint256 x, uint256 y, uint256 d) internal pure returns (uint256 z) {
+        unchecked {
+            if (d == 0) revert();
+            z = (x * y) / d;
+        }
+    }
+
+    function mulDivUp(uint256 x, uint256 y, uint256 d) internal pure returns (uint256 z) {
+        unchecked {
+            if (d == 0) revert();
+            z = (x * y + (d - 1)) / d;
+        }
+    }
+
+    function sqrt(uint256 x) internal pure returns (uint256 z) {
+        if (x == 0) return 0;
+        uint256 xx = x;
+        z = 1;
+        if (xx >= 0x100000000000000000000000000000000) { xx >>= 128; z <<= 64; }
+        if (xx >= 0x10000000000000000) { xx >>= 64; z <<= 32; }
+        if (xx >= 0x100000000) { xx >>= 32; z <<= 16; }
+        if (xx >= 0x10000) { xx >>= 16; z <<= 8; }
+        if (xx >= 0x100) { xx >>= 8; z <<= 4; }
+        if (xx >= 0x10) { xx >>= 4; z <<= 2; }
+        if (xx >= 0x8) { z <<= 1; }
+        unchecked {
+            z = (z + x / z) >> 1;
+            z = (z + x / z) >> 1;
+            z = (z + x / z) >> 1;
+            z = (z + x / z) >> 1;
+            uint256 z1 = x / z;
+            if (z1 < z) z = z1;
+        }
