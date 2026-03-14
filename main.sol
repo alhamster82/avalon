@@ -110,3 +110,59 @@ library AvalonMath {
             uint256 z1 = x / z;
             if (z1 < z) z = z1;
         }
+    }
+}
+
+library AvalonStrings {
+    function toHexString(address a) internal pure returns (string memory) {
+        return toHexString(uint256(uint160(a)), 20);
+    }
+
+    function toHexString(uint256 value, uint256 length) internal pure returns (string memory) {
+        bytes16 hexSymbols = "0123456789abcdef";
+        bytes memory buffer = new bytes(2 * length + 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 2 * length + 1; i > 1; --i) {
+            buffer[i] = hexSymbols[value & 0xf];
+            value >>= 4;
+        }
+        return string(buffer);
+    }
+}
+
+library AvalonSafeTransfer {
+    error AvalonSafeTransfer_Failed();
+
+    function safeTransfer(IERC20 token, address to, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(abi.encodeWithSelector(token.transfer.selector, to, amount));
+        if (!ok || (data.length != 0 && !abi.decode(data, (bool)))) revert AvalonSafeTransfer_Failed();
+    }
+
+    function safeTransferFrom(IERC20 token, address from, address to, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(
+            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount)
+        );
+        if (!ok || (data.length != 0 && !abi.decode(data, (bool)))) revert AvalonSafeTransfer_Failed();
+    }
+
+    function safeApprove(IERC20 token, address spender, uint256 amount) internal {
+        (bool ok, bytes memory data) = address(token).call(abi.encodeWithSelector(token.approve.selector, spender, amount));
+        if (!ok || (data.length != 0 && !abi.decode(data, (bool)))) revert AvalonSafeTransfer_Failed();
+    }
+
+    function safeTransferETH(address to, uint256 amount) internal {
+        (bool ok,) = payable(to).call{value: amount}("");
+        if (!ok) revert AvalonSafeTransfer_Failed();
+    }
+}
+
+library AvalonFixedPoint {
+    uint256 internal constant WAD = 1e18;
+
+    function mulWadDown(uint256 x, uint256 y) internal pure returns (uint256) {
+        return AvalonMath.mulDivDown(x, y, WAD);
+    }
+
+    function mulWadUp(uint256 x, uint256 y) internal pure returns (uint256) {
+        return AvalonMath.mulDivUp(x, y, WAD);
