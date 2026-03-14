@@ -278,3 +278,59 @@ abstract contract AvalonAccess {
 // ============================================================================
 
 contract AvalonShareToken {
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    error AvalonShareToken_InsufficientBalance();
+    error AvalonShareToken_InsufficientAllowance();
+    error AvalonShareToken_ZeroAddress();
+
+    string public name;
+    string public symbol;
+    uint8 public immutable decimals;
+
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    address public immutable issuer;
+
+    modifier onlyIssuer() {
+        if (msg.sender != issuer) revert AvalonShareToken_ZeroAddress();
+        _;
+    }
+
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_,
+        address issuer_
+    ) {
+        if (issuer_ == address(0)) revert AvalonShareToken_ZeroAddress();
+        name = name_;
+        symbol = symbol_;
+        decimals = decimals_;
+        issuer = issuer_;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        _transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed != type(uint256).max) {
+            if (allowed < amount) revert AvalonShareToken_InsufficientAllowance();
+            unchecked { allowance[from][msg.sender] = allowed - amount; }
+        }
+        _transfer(from, to, amount);
+        return true;
+    }
+
