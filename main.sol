@@ -334,3 +334,59 @@ contract AvalonShareToken {
         return true;
     }
 
+    function _transfer(address from, address to, uint256 amount) internal {
+        if (to == address(0)) revert AvalonShareToken_ZeroAddress();
+        uint256 bal = balanceOf[from];
+        if (bal < amount) revert AvalonShareToken_InsufficientBalance();
+        unchecked {
+            balanceOf[from] = bal - amount;
+            balanceOf[to] += amount;
+        }
+        emit Transfer(from, to, amount);
+    }
+
+    function mint(address to, uint256 amount) external onlyIssuer {
+        if (to == address(0)) revert AvalonShareToken_ZeroAddress();
+        totalSupply += amount;
+        unchecked { balanceOf[to] += amount; }
+        emit Transfer(address(0), to, amount);
+    }
+
+    function burn(address from, uint256 amount) external onlyIssuer {
+        uint256 bal = balanceOf[from];
+        if (bal < amount) revert AvalonShareToken_InsufficientBalance();
+        unchecked { balanceOf[from] = bal - amount; }
+        totalSupply -= amount;
+        emit Transfer(from, address(0), amount);
+    }
+}
+
+// ============================================================================
+//  Avalon Core
+// ============================================================================
+
+contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
+    using AvalonSafeTransfer for IERC20;
+    using AvalonSafeTransfer for address;
+    using AvalonMath for uint256;
+
+    // ----------------------------
+    // Errors (custom & unique)
+    // ----------------------------
+
+    error Avalon_BadAsset();
+    error Avalon_BadAmount();
+    error Avalon_BadSlippage();
+    error Avalon_BadAdapter();
+    error Avalon_AdapterNotAllowed(bytes32 adapterId);
+    error Avalon_IntentNotFound(uint256 intentId);
+    error Avalon_IntentState(uint256 intentId, uint8 state);
+    error Avalon_IntentExpired(uint256 intentId);
+    error Avalon_IntentCooldown();
+    error Avalon_IntentWindowFull();
+    error Avalon_InsufficientShares();
+    error Avalon_InsufficientAssets();
+    error Avalon_LimitViolation(bytes32 which, uint256 observed, uint256 allowed);
+    error Avalon_ReceiverBlocked(address receiver);
+    error Avalon_ValueNotAllowed();
+    error Avalon_SignatureNotSupported();
