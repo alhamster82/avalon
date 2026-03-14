@@ -558,3 +558,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         string memory shareSymbol
     ) {
         if (address(asset_) == address(0)) revert Avalon_BadAsset();
+
+        genesisDeployer = msg.sender;
+        asset = asset_;
+
+        // domain is unique to chain+contract+revision
+        AVALON_DOMAIN = keccak256(
+            abi.encodePacked(
+                "AVALON-DOMAIN/",
+                block.chainid,
+                address(this),
+                uint256(AVALON_REVISION),
+                shareName,
+                shareSymbol
+            )
+        );
+
+        share = new AvalonShareToken(
+            shareName,
+            shareSymbol,
+            _readDecimalsOrAssume(asset_),
+            address(this)
+        );
+
+        _initRole(ROLE_GOVERNOR, msg.sender);
+        _initRole(ROLE_SENTINEL, msg.sender);
+        _initRole(ROLE_OPERATOR, msg.sender);
+        _initRole(ROLE_FEE_SETTER, msg.sender);
+
+        // initialize policy with non-trivial defaults (no "fill in" parameters)
+        policy = Policy({
+            maxValueWei: 7 ether + uint256(uint160(address(this))) % 3 ether,
+            minValueWei: 0,
+            maxLossWei: 2 ether + uint256(uint160(msg.sender)) % 1 ether,
+            maxDailyLossWei: 6 ether + uint256(uint160(msg.sender)) % 2 ether,
+            maxAdapterCallsPerTx: 5 + (uint256(uint160(address(this))) % 3),
+            minTimeToExpiry: 60,
+            maxTimeToExpiry: 7 days + (uint256(uint160(address(this))) % 3 days),
+            maxPayloadSize: 2048 + (uint256(uint160(msg.sender)) % 1024)
+        });
+
+        intentWindowSeconds = 173 + uint32(uint256(AVALON_DOMAIN) % 517);
+        maxIntentsPerWindow = 11 + uint32(uint256(AVALON_DOMAIN >> 128) % 41);
+        intentCooldownSeconds = 19 + uint32(uint256(uint160(msg.sender)) % 47);
+
+        feeBps = uint16(17 + (uint256(AVALON_DOMAIN) % 73));
+        feeReceiver = msg.sender;
+
+        _intents.push(); // id 0 reserved; avoids default/empty ambiguity
+        lastKnownAssets = _totalAssets();
+        totalManagedAssetsHint = lastKnownAssets;
+        lastSyncAt = uint64(block.timestamp);
+
+        emit AvalonBoot(msg.sender, address(asset_), address(share), AVALON_DOMAIN, block.number);
+    }
+
+    // ============================================================================
