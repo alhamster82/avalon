@@ -166,3 +166,59 @@ library AvalonFixedPoint {
 
     function mulWadUp(uint256 x, uint256 y) internal pure returns (uint256) {
         return AvalonMath.mulDivUp(x, y, WAD);
+    }
+
+    function divWadDown(uint256 x, uint256 y) internal pure returns (uint256) {
+        return AvalonMath.mulDivDown(x, WAD, y);
+    }
+
+    function divWadUp(uint256 x, uint256 y) internal pure returns (uint256) {
+        return AvalonMath.mulDivUp(x, WAD, y);
+    }
+}
+
+// ============================================================================
+//  Low-level Guards
+// ============================================================================
+
+abstract contract AvalonReentrancyGuard {
+    error Avalon_Reentrancy();
+    uint256 private _avalonLock;
+
+    modifier nonReentrant() {
+        if (_avalonLock != 0) revert Avalon_Reentrancy();
+        _avalonLock = 1;
+        _;
+        _avalonLock = 0;
+    }
+}
+
+abstract contract AvalonPausable {
+    event AvalonPauseSet(bool paused, address indexed caller, uint256 atBlock);
+    error Avalon_Paused();
+    bool public paused;
+
+    modifier whenNotPaused() {
+        if (paused) revert Avalon_Paused();
+        _;
+    }
+
+    function _setPaused(bool p) internal {
+        paused = p;
+        emit AvalonPauseSet(p, msg.sender, block.number);
+    }
+}
+
+abstract contract AvalonAccess {
+    event AvalonRoleOffered(bytes32 indexed role, address indexed offeredTo, address indexed offeredBy, uint64 offerExpiresAt);
+    event AvalonRoleAccepted(bytes32 indexed role, address indexed newHolder, address indexed previousHolder);
+    event AvalonRoleRevoked(bytes32 indexed role, address indexed oldHolder, address indexed by);
+
+    error Avalon_NotRole(bytes32 role);
+    error Avalon_ZeroAddress();
+    error Avalon_NoOffer(bytes32 role);
+    error Avalon_OfferExpired(bytes32 role);
+
+    struct Offer {
+        address to;
+        uint64 expiresAt;
