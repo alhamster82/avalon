@@ -390,3 +390,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
     error Avalon_ReceiverBlocked(address receiver);
     error Avalon_ValueNotAllowed();
     error Avalon_SignatureNotSupported();
+    error Avalon_BadFeeBps();
+    error Avalon_BadTimestamp();
+    error Avalon_BadRoleTTL();
+
+    // ----------------------------
+    // Events (unique)
+    // ----------------------------
+
+    event AvalonBoot(
+        address indexed deployer,
+        address indexed asset,
+        address indexed shareToken,
+        bytes32 domain,
+        uint256 atBlock
+    );
+
+    event AvalonDeposit(
+        address indexed caller,
+        address indexed receiver,
+        uint256 assetsIn,
+        uint256 sharesOut,
+        uint256 atBlock
+    );
+
+    event AvalonWithdraw(
+        address indexed caller,
+        address indexed receiver,
+        address indexed owner,
+        uint256 assetsOut,
+        uint256 sharesBurned,
+        uint256 atBlock
+    );
+
+    event AvalonAdapterAllowance(bytes32 indexed adapterId, address indexed adapter, bool allowed, uint256 atBlock);
+    event AvalonReceiverBlock(address indexed receiver, bool blocked, uint256 atBlock);
+    event AvalonFeeSet(uint16 feeBps, address indexed feeReceiver, uint256 atBlock);
+
+    event AvalonIntentSubmitted(
+        uint256 indexed intentId,
+        bytes32 indexed adapterId,
+        address indexed adapter,
+        bytes32 payloadHash,
+        uint96 valueWei,
+        uint40 notBefore,
+        uint40 expiresAt,
+        uint32 nonce,
+        address operator,
+        uint256 atBlock
+    );
+
+    event AvalonIntentExecuted(
+        uint256 indexed intentId,
+        bytes32 indexed adapterId,
+        address indexed adapter,
+        uint256 assetsBefore,
+        uint256 assetsAfter,
