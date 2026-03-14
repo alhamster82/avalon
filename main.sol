@@ -222,3 +222,59 @@ abstract contract AvalonAccess {
     struct Offer {
         address to;
         uint64 expiresAt;
+    }
+
+    mapping(bytes32 => address) internal _roleHolder;
+    mapping(bytes32 => Offer) internal _roleOffer;
+
+    modifier onlyRole(bytes32 role) {
+        if (msg.sender != _roleHolder[role]) revert Avalon_NotRole(role);
+        _;
+    }
+
+    function roleHolder(bytes32 role) external view returns (address) {
+        return _roleHolder[role];
+    }
+
+    function roleOffer(bytes32 role) external view returns (address to, uint64 expiresAt) {
+        Offer memory o = _roleOffer[role];
+        return (o.to, o.expiresAt);
+    }
+
+    function _initRole(bytes32 role, address holder) internal {
+        if (holder == address(0)) revert Avalon_ZeroAddress();
+        _roleHolder[role] = holder;
+    }
+
+    function _offerRole(bytes32 role, address to, uint64 ttlSeconds) internal {
+        if (to == address(0)) revert Avalon_ZeroAddress();
+        uint64 exp = uint64(block.timestamp) + ttlSeconds;
+        _roleOffer[role] = Offer({to: to, expiresAt: exp});
+        emit AvalonRoleOffered(role, to, msg.sender, exp);
+    }
+
+    function _acceptRole(bytes32 role) internal {
+        Offer memory o = _roleOffer[role];
+        if (o.to == address(0)) revert Avalon_NoOffer(role);
+        if (block.timestamp > o.expiresAt) revert Avalon_OfferExpired(role);
+        if (msg.sender != o.to) revert Avalon_NotRole(role);
+
+        address prev = _roleHolder[role];
+        _roleHolder[role] = msg.sender;
+        delete _roleOffer[role];
+        emit AvalonRoleAccepted(role, msg.sender, prev);
+    }
+
+    function _revokeRole(bytes32 role) internal {
+        address prev = _roleHolder[role];
+        _roleHolder[role] = address(0);
+        delete _roleOffer[role];
+        emit AvalonRoleRevoked(role, prev, msg.sender);
+    }
+}
+
+// ============================================================================
+//  Share Token (ERC20-like, specialized)
+// ============================================================================
+
+contract AvalonShareToken {
