@@ -502,3 +502,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         uint256 maxValueWei;
         uint256 minValueWei;
         uint256 maxLossWei;
+        uint256 maxDailyLossWei;
+        uint256 maxAdapterCallsPerTx;
+        uint256 minTimeToExpiry;
+        uint256 maxTimeToExpiry;
+        uint256 maxPayloadSize;
+    }
+
+    Policy public policy;
+
+    // ----------------------------
+    // Intents
+    // ----------------------------
+
+    // state:
+    // 0 = empty
+    // 1 = submitted
+    // 2 = executed
+    // 3 = voided
+    struct Intent {
+        bytes32 adapterId;
+        address adapter;
+        bytes32 payloadHash;
+        uint96 valueWei;
+        uint40 notBefore;
+        uint40 expiresAt;
+        uint32 nonce;
+        address operator;
+        uint8 state;
+    }
+
+    Intent[] private _intents;
+    mapping(bytes32 => address) public adapterById;
+    mapping(bytes32 => bool) public adapterAllowed;
+    mapping(address => bool) public receiverBlocked;
+
+    // anti-spam cadence
+    uint32 public intentWindowSeconds;
+    uint32 public maxIntentsPerWindow;
+    uint32 public intentCooldownSeconds;
+    uint64 private _lastIntentAt;
+    mapping(uint64 => uint32) private _windowCounts;
+
+    // loss tracking (simple)
+    uint256 public lastKnownAssets;
+    mapping(uint32 => uint256) public lossByDay;
+
+    // ----------------------------
+    // Constructor
+    // ----------------------------
+
+    constructor(
+        IERC20 asset_,
+        string memory shareName,
+        string memory shareSymbol
+    ) {
+        if (address(asset_) == address(0)) revert Avalon_BadAsset();
