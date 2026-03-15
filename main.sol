@@ -1174,3 +1174,50 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
 
     // ============================================================================
     //  Lens: convenience views (kept on-chain to avoid off-chain coupling)
+    // ============================================================================
+
+    function getRoles() external view returns (address governor, address sentinel, address operator, address feeSetter) {
+        return (_roleHolder[ROLE_GOVERNOR], _roleHolder[ROLE_SENTINEL], _roleHolder[ROLE_OPERATOR], _roleHolder[ROLE_FEE_SETTER]);
+    }
+
+    function getPolicy() external view returns (Policy memory) {
+        return policy;
+    }
+
+    function getCadence() external view returns (uint32 windowSeconds, uint32 maxPerWindow, uint32 cooldownSeconds, uint64 lastIntentAt) {
+        return (intentWindowSeconds, maxIntentsPerWindow, intentCooldownSeconds, _lastIntentAt);
+    }
+
+    function getShareToken() external view returns (address token, string memory name_, string memory symbol_, uint8 decimals_) {
+        return (address(share), share.name(), share.symbol(), share.decimals());
+    }
+
+    function getFee() external view returns (uint16 feeBps_, address feeReceiver_) {
+        return (feeBps, feeReceiver);
+    }
+
+    function getHints() external view returns (uint256 managedAssetsHint, uint64 lastSyncAt_) {
+        return (totalManagedAssetsHint, lastSyncAt);
+    }
+
+    function getLoss(uint32 day) external view returns (uint256 used, uint256 limit) {
+        return (lossByDay[day], policy.maxDailyLossWei);
+    }
+
+    function currentDay() external view returns (uint32) {
+        return uint32(block.timestamp / 1 days);
+    }
+
+    function domain() external view returns (bytes32) {
+        return AVALON_DOMAIN;
+    }
+
+    function revision() external pure returns (uint256) {
+        return AVALON_REVISION;
+    }
+
+    receive() external payable {
+        // Accept ETH only for adapter execution value routing.
+        // Any unexpected ETH can be swept by governor.
+    }
+}
