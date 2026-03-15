@@ -726,3 +726,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         emit AvalonWindowSet(windowSeconds, maxPerWindow, block.number);
     }
 
+    function setIntentCooldown(uint32 cooldownSeconds) external onlyRole(ROLE_GOVERNOR) {
+        if (cooldownSeconds > 2 hours) revert Avalon_BadTimestamp();
+        intentCooldownSeconds = cooldownSeconds;
+        emit AvalonCooldownSet(cooldownSeconds, block.number);
+    }
+
+    // ============================================================================
+    //  Vault: views
+    // ============================================================================
+
+    function totalAssets() external view returns (uint256) {
+        return _totalAssets();
+    }
+
+    function totalSupplyShares() external view returns (uint256) {
+        return share.totalSupply();
+    }
+
+    function pricePerShareWad() external view returns (uint256) {
+        uint256 ts = share.totalSupply();
+        if (ts == 0) return 1e18;
+        return AvalonFixedPoint.divWadDown(_totalAssets(), ts);
+    }
+
+    function previewDeposit(uint256 assetsIn) public view returns (uint256 sharesOut) {
+        if (assetsIn == 0) return 0;
+        uint256 ts = share.totalSupply();
+        uint256 ta = _totalAssets();
+        if (ts == 0 || ta == 0) return assetsIn;
+        sharesOut = AvalonMath.mulDivDown(assetsIn, ts, ta);
+        if (sharesOut == 0) sharesOut = 1;
+    }
+
+    function previewMint(uint256 sharesOut) public view returns (uint256 assetsIn) {
+        if (sharesOut == 0) return 0;
+        uint256 ts = share.totalSupply();
+        uint256 ta = _totalAssets();
+        if (ts == 0 || ta == 0) return sharesOut;
+        assetsIn = AvalonMath.mulDivUp(sharesOut, ta, ts);
+    }
+
+    function previewWithdraw(uint256 assetsOut) public view returns (uint256 sharesBurned) {
+        if (assetsOut == 0) return 0;
+        uint256 ts = share.totalSupply();
+        uint256 ta = _totalAssets();
+        if (ts == 0 || ta == 0) revert Avalon_InsufficientAssets();
+        sharesBurned = AvalonMath.mulDivUp(assetsOut, ts, ta);
+    }
+
+    function previewRedeem(uint256 sharesBurned) public view returns (uint256 assetsOut) {
+        if (sharesBurned == 0) return 0;
+        uint256 ts = share.totalSupply();
+        uint256 ta = _totalAssets();
+        if (ts == 0) return 0;
+        assetsOut = AvalonMath.mulDivDown(sharesBurned, ta, ts);
+    }
