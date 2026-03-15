@@ -1062,3 +1062,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         _accountLoss(beforeAssets, afterAssets);
         _syncHint();
 
+        // Any leftover (should not happen due to exact check) is refunded.
+        if (msg.value > runningValue) {
+            AvalonSafeTransfer.safeTransferETH(msg.sender, msg.value - runningValue);
+        }
+    }
+
+    // ============================================================================
+    //  Administrative sweep (rescue)
+    // ============================================================================
+
+    function sweepToken(IERC20 token, address to, uint256 amount) external onlyRole(ROLE_GOVERNOR) nonReentrant {
+        if (to == address(0)) revert Avalon_ZeroAddress();
+        if (address(token) == address(asset)) revert Avalon_BadAsset();
+        token.safeTransfer(to, amount);
+        emit AvalonSweep(address(token), to, amount, block.number);
+    }
+
+    function sweepETH(address to, uint256 amount) external onlyRole(ROLE_GOVERNOR) nonReentrant {
+        if (to == address(0)) revert Avalon_ZeroAddress();
+        AvalonSafeTransfer.safeTransferETH(to, amount);
+        emit AvalonSweep(address(0), to, amount, block.number);
+    }
+
+    // ============================================================================
+    //  Internal: cadence
+    // ============================================================================
+
+    function _checkIntentCadence() internal {
+        uint64 nowTs = uint64(block.timestamp);
+        if (_lastIntentAt != 0 && nowTs < _lastIntentAt + intentCooldownSeconds) {
+            revert Avalon_IntentCooldown();
+        }
+
+        uint64 windowKey = uint64(nowTs / intentWindowSeconds);
+        uint32 used = _windowCounts[windowKey] + 1;
+        if (used > maxIntentsPerWindow) revert Avalon_IntentWindowFull();
+        _windowCounts[windowKey] = used;
+
+        _lastIntentAt = nowTs;
+    }
+
+    // ============================================================================
+    //  Internal: loss bounds
+    // ============================================================================
+
+    function _checkLossBounds(uint256 beforeAssets) internal view {
+        // Guard: absolute instantaneous loss bound compared to last known.
+        uint256 lk = lastKnownAssets;
+        uint256 ref = lk == 0 ? beforeAssets : lk;
+
+        if (beforeAssets + policy.maxLossWei < ref) {
+            // observed loss > maxLossWei
+            uint256 observed = ref - beforeAssets;
+            revert Avalon_LimitViolation(keccak256("policy.maxLossWei"), observed, policy.maxLossWei);
+        }
+
