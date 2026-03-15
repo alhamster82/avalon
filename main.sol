@@ -1006,3 +1006,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
 
         uint256 afterAssets = _totalAssets();
         _accountLoss(beforeAssets, afterAssets);
+        _syncHint();
+
+        emit AvalonIntentExecuted(intentId, it.adapterId, it.adapter, beforeAssets, afterAssets, result, block.number);
+    }
+
+    function executeIntentsBatch(uint256[] calldata intentIds, bytes[] calldata payloads)
+        external
+        payable
+        whenNotPaused
+        onlyRole(ROLE_OPERATOR)
+        nonReentrant
+        returns (bytes[] memory results)
+    {
+        uint256 n = intentIds.length;
+        if (n == 0 || n != payloads.length) revert Avalon_BadAmount();
+        if (n > policy.maxAdapterCallsPerTx) revert Avalon_LimitViolation(keccak256("policy.maxAdapterCallsPerTx"), n, policy.maxAdapterCallsPerTx);
+
+        results = new bytes[](n);
+
+        // Simple value accounting: require exact per-intent value sum.
+        uint256 sumValue = 0;
+        for (uint256 i = 0; i < n; i++) {
+            Intent storage it = _mustIntent(intentIds[i]);
+            if (it.state != 1) revert Avalon_IntentState(intentIds[i], it.state);
+            sumValue += uint256(it.valueWei);
+        }
+        if (msg.value != sumValue) revert Avalon_ValueNotAllowed();
+
+        uint256 beforeAssets = _totalAssets();
+        _checkLossBounds(beforeAssets);
+
+        uint256 runningValue = 0;
+        for (uint256 i = 0; i < n; i++) {
+            uint256 id = intentIds[i];
+            Intent storage it2 = _mustIntent(id);
+
+            uint40 nowTs = uint40(block.timestamp);
+            if (nowTs < it2.notBefore) revert Avalon_IntentExpired(id);
+            if (nowTs > it2.expiresAt) revert Avalon_IntentExpired(id);
+
+            bytes calldata payload = payloads[i];
+            if (keccak256(payload) != it2.payloadHash) revert Avalon_BadAmount();
+            if (!adapterAllowed[it2.adapterId]) revert Avalon_AdapterNotAllowed(it2.adapterId);
+            if (it2.adapter != adapterById[it2.adapterId]) revert Avalon_BadAdapter();
+
+            it2.state = 2;
+
+            uint256 v = uint256(it2.valueWei);
+            runningValue += v;
+            results[i] = IAvalonAdapter(it2.adapter).execute{value: v}(payload);
+        }
+
+        uint256 afterAssets = _totalAssets();
+        _accountLoss(beforeAssets, afterAssets);
+        _syncHint();
+
