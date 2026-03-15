@@ -894,3 +894,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
     function intentCount() external view returns (uint256) {
         return _intents.length;
     }
+
+    function getIntent(uint256 intentId) external view returns (Intent memory) {
+        if (intentId >= _intents.length) revert Avalon_IntentNotFound(intentId);
+        return _intents[intentId];
+    }
+
+    function submitIntent(
+        bytes32 adapterId,
+        bytes calldata payload,
+        uint96 valueWei,
+        uint40 notBefore,
+        uint40 expiresAt,
+        uint32 nonce
+    ) external whenNotPaused onlyRole(ROLE_OPERATOR) nonReentrant returns (uint256 intentId) {
+        if (!adapterAllowed[adapterId]) revert Avalon_AdapterNotAllowed(adapterId);
+        address adapter = adapterById[adapterId];
+        if (adapter == address(0)) revert Avalon_BadAdapter();
+
+        if (payload.length == 0 || payload.length > policy.maxPayloadSize || payload.length > MAX_INTENT_BYTES) {
+            revert Avalon_BadAmount();
+        }
+
+        if (valueWei < policy.minValueWei || valueWei > policy.maxValueWei) {
+            revert Avalon_LimitViolation(keccak256("policy.valueWei"), valueWei, policy.maxValueWei);
+        }
+
+        uint40 nowTs = uint40(block.timestamp);
+        if (expiresAt <= nowTs) revert Avalon_BadTimestamp();
+        if (notBefore < nowTs) notBefore = nowTs;
+
+        uint256 dt = uint256(expiresAt - notBefore);
+        if (dt < policy.minTimeToExpiry || dt > policy.maxTimeToExpiry) revert Avalon_BadTimestamp();
+
+        _checkIntentCadence();
+
+        bytes32 payloadHash = keccak256(payload);
+
+        _intents.push(
+            Intent({
+                adapterId: adapterId,
+                adapter: adapter,
+                payloadHash: payloadHash,
+                valueWei: valueWei,
+                notBefore: notBefore,
+                expiresAt: expiresAt,
+                nonce: nonce,
+                operator: msg.sender,
+                state: 1
+            })
+        );
+        intentId = _intents.length - 1;
+
+        emit AvalonIntentSubmitted(
+            intentId,
+            adapterId,
+            adapter,
