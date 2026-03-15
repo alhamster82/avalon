@@ -782,3 +782,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         if (ts == 0) return 0;
         assetsOut = AvalonMath.mulDivDown(sharesBurned, ta, ts);
     }
+
+    // ============================================================================
+    //  Vault: deposit/mint
+    // ============================================================================
+
+    function deposit(uint256 assetsIn, address receiver) external whenNotPaused nonReentrant returns (uint256 sharesOut) {
+        if (receiver == address(0)) revert Avalon_ZeroAddress();
+        if (receiverBlocked[receiver]) revert Avalon_ReceiverBlocked(receiver);
+        if (assetsIn == 0) revert Avalon_BadAmount();
+
+        sharesOut = previewDeposit(assetsIn);
+        asset.safeTransferFrom(msg.sender, address(this), assetsIn);
+        share.mint(receiver, sharesOut);
+
+        _syncHint();
+        emit AvalonDeposit(msg.sender, receiver, assetsIn, sharesOut, block.number);
+    }
+
+    function mint(uint256 sharesOut, address receiver) external whenNotPaused nonReentrant returns (uint256 assetsIn) {
+        if (receiver == address(0)) revert Avalon_ZeroAddress();
+        if (receiverBlocked[receiver]) revert Avalon_ReceiverBlocked(receiver);
+        if (sharesOut == 0) revert Avalon_BadAmount();
+
+        assetsIn = previewMint(sharesOut);
+        asset.safeTransferFrom(msg.sender, address(this), assetsIn);
+        share.mint(receiver, sharesOut);
+
+        _syncHint();
+        emit AvalonDeposit(msg.sender, receiver, assetsIn, sharesOut, block.number);
+    }
+
+    // ============================================================================
+    //  Vault: withdraw/redeem
+    // ============================================================================
+
+    function withdraw(uint256 assetsOut, address receiver, address owner)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 sharesBurned)
+    {
+        if (receiver == address(0) || owner == address(0)) revert Avalon_ZeroAddress();
+        if (receiverBlocked[receiver]) revert Avalon_ReceiverBlocked(receiver);
+        if (assetsOut == 0) revert Avalon_BadAmount();
+
+        sharesBurned = previewWithdraw(assetsOut);
+        _spendAllowanceIfNeeded(owner, sharesBurned);
+        share.burn(owner, sharesBurned);
+
+        _applyFee(assetsOut);
+        asset.safeTransfer(receiver, assetsOut);
+
+        _syncHint();
+        emit AvalonWithdraw(msg.sender, receiver, owner, assetsOut, sharesBurned, block.number);
+    }
+
