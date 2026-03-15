@@ -950,3 +950,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
             intentId,
             adapterId,
             adapter,
+            payloadHash,
+            valueWei,
+            notBefore,
+            expiresAt,
+            nonce,
+            msg.sender,
+            block.number
+        );
+    }
+
+    function voidIntent(uint256 intentId, uint8 reasonCode) external nonReentrant {
+        Intent storage it = _mustIntent(intentId);
+        if (it.state != 1) revert Avalon_IntentState(intentId, it.state);
+        if (msg.sender != it.operator && msg.sender != _roleHolder[ROLE_SENTINEL] && msg.sender != _roleHolder[ROLE_GOVERNOR]) {
+            revert Avalon_NotRole(ROLE_OPERATOR);
+        }
+        it.state = 3;
+        emit AvalonIntentVoided(intentId, reasonCode, msg.sender, block.number);
+    }
+
+    // ============================================================================
+    //  Intents: execute
+    // ============================================================================
+
+    function executeIntent(uint256 intentId, bytes calldata payload)
+        external
+        payable
+        whenNotPaused
+        onlyRole(ROLE_OPERATOR)
+        nonReentrant
+        returns (bytes memory result)
+    {
+        Intent storage it = _mustIntent(intentId);
+        if (it.state != 1) revert Avalon_IntentState(intentId, it.state);
+
+        uint40 nowTs = uint40(block.timestamp);
+        if (nowTs < it.notBefore) revert Avalon_IntentExpired(intentId);
+        if (nowTs > it.expiresAt) revert Avalon_IntentExpired(intentId);
+
+        if (keccak256(payload) != it.payloadHash) revert Avalon_BadAmount();
+        if (!adapterAllowed[it.adapterId]) revert Avalon_AdapterNotAllowed(it.adapterId);
+        if (it.adapter != adapterById[it.adapterId]) revert Avalon_BadAdapter();
+
+        if (msg.value != uint256(it.valueWei)) revert Avalon_ValueNotAllowed();
+
+        uint256 beforeAssets = _totalAssets();
+        _checkLossBounds(beforeAssets);
+
+        it.state = 2;
+
+        // Execute through adapter.
+        // Adapter is expected to perform its own external checks; we enforce registry + payloadHash.
+        result = IAvalonAdapter(it.adapter).execute{value: msg.value}(payload);
+
+        uint256 afterAssets = _totalAssets();
+        _accountLoss(beforeAssets, afterAssets);
