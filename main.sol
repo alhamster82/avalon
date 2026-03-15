@@ -1118,3 +1118,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
             revert Avalon_LimitViolation(keccak256("policy.maxLossWei"), observed, policy.maxLossWei);
         }
 
+        // Guard: daily loss bound.
+        uint32 day = uint32(block.timestamp / 1 days);
+        uint256 used = lossByDay[day];
+        if (used > policy.maxDailyLossWei) {
+            revert Avalon_LimitViolation(keccak256("policy.maxDailyLossWei"), used, policy.maxDailyLossWei);
+        }
+    }
+
+    function _accountLoss(uint256 beforeAssets, uint256 afterAssets) internal {
+        if (afterAssets >= beforeAssets) {
+            lastKnownAssets = afterAssets;
+            return;
+        }
+
+        uint256 loss = beforeAssets - afterAssets;
+        if (loss > policy.maxLossWei) revert Avalon_LimitViolation(keccak256("policy.maxLossWei"), loss, policy.maxLossWei);
+
+        uint32 day = uint32(block.timestamp / 1 days);
+        uint256 used = lossByDay[day] + loss;
+        lossByDay[day] = used;
+        if (used > policy.maxDailyLossWei) revert Avalon_LimitViolation(keccak256("policy.maxDailyLossWei"), used, policy.maxDailyLossWei);
+
+        lastKnownAssets = afterAssets;
+    }
+
+    // ============================================================================
+    //  Internal: helpers
+    // ============================================================================
+
+    function _mustIntent(uint256 intentId) internal view returns (Intent storage it) {
+        if (intentId == 0 || intentId >= _intents.length) revert Avalon_IntentNotFound(intentId);
+        it = _intents[intentId];
+        if (it.state == 0) revert Avalon_IntentNotFound(intentId);
+    }
+
+    function _totalAssets() internal view returns (uint256) {
+        return asset.balanceOf(address(this));
+    }
+
+    function _syncHint() internal {
+        totalManagedAssetsHint = _totalAssets();
+        lastSyncAt = uint64(block.timestamp);
+    }
+
+    function _readDecimalsOrAssume(IERC20 token) internal view returns (uint8 d) {
+        // Many tokens implement decimals() but it's not in IERC20.
+        (bool ok, bytes memory data) = address(token).staticcall(abi.encodeWithSignature("decimals()"));
+        if (ok && data.length >= 32) {
+            d = abi.decode(data, (uint8));
+        } else {
+            d = 18;
+        }
+    }
+
+    // ============================================================================
+    //  Lens: convenience views (kept on-chain to avoid off-chain coupling)
