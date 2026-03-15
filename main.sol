@@ -838,3 +838,59 @@ contract Avalon is AvalonReentrancyGuard, AvalonPausable, AvalonAccess {
         emit AvalonWithdraw(msg.sender, receiver, owner, assetsOut, sharesBurned, block.number);
     }
 
+    function redeem(uint256 sharesBurned, address receiver, address owner)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 assetsOut)
+    {
+        if (receiver == address(0) || owner == address(0)) revert Avalon_ZeroAddress();
+        if (receiverBlocked[receiver]) revert Avalon_ReceiverBlocked(receiver);
+        if (sharesBurned == 0) revert Avalon_BadAmount();
+
+        assetsOut = previewRedeem(sharesBurned);
+        if (assetsOut == 0) revert Avalon_InsufficientAssets();
+
+        _spendAllowanceIfNeeded(owner, sharesBurned);
+        share.burn(owner, sharesBurned);
+
+        _applyFee(assetsOut);
+        asset.safeTransfer(receiver, assetsOut);
+
+        _syncHint();
+        emit AvalonWithdraw(msg.sender, receiver, owner, assetsOut, sharesBurned, block.number);
+    }
+
+    function _spendAllowanceIfNeeded(address owner, uint256 sharesBurned) internal {
+        if (msg.sender == owner) return;
+        uint256 allowed = share.allowance(owner, msg.sender);
+        if (allowed != type(uint256).max) {
+            if (allowed < sharesBurned) revert Avalon_InsufficientShares();
+            // share is a contract we control; call approve-style by direct storage? no.
+            // Use ERC20 allowance mechanics: require user to set allowance; we can't reduce it here without a function.
+            // Therefore: use transferFrom path by pulling shares to this contract then burning.
+            // This function is only used to check; actual burn uses issuer-only burn.
+        }
+
+        // Pull shares to this contract then burn (spends allowance via transferFrom).
+        // If allowance is missing, transferFrom will revert inside share.
+        bool ok = share.transferFrom(owner, address(this), sharesBurned);
+        if (!ok) revert Avalon_InsufficientShares();
+        share.burn(address(this), sharesBurned);
+    }
+
+    function _applyFee(uint256 assetsOut) internal {
+        uint16 bps = feeBps;
+        if (bps == 0) return;
+        uint256 fee = (assetsOut * bps) / BPS_DENOMINATOR;
+        if (fee == 0) return;
+        asset.safeTransfer(feeReceiver, fee);
+    }
+
+    // ============================================================================
+    //  Intents: submit
+    // ============================================================================
+
+    function intentCount() external view returns (uint256) {
+        return _intents.length;
+    }
